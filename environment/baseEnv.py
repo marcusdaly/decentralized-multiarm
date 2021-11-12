@@ -228,7 +228,8 @@ class BaseEnv:
         if colliding:
             self.on_collision()
         self.state = {
-            "ur5s": []
+            "ur5s": [],
+            "image": None,
         }
 
         self.state['ur5s'] = [{
@@ -244,6 +245,30 @@ class BaseEnv:
         } for i, (ur5, target_eef_pose) in
             enumerate(zip(self.active_ur5s,
                           self.task_manager.get_target_end_effector_poses()))]
+
+        # TODO make sure camera is angled at center of scene.
+        viewMatrix = p.computeViewMatrix(
+            cameraEyePosition=[0, 0, 3],
+            cameraTargetPosition=[0, 0, 0],
+            cameraUpVector=[0, 1, 0])
+
+        projectionMatrix = p.computeProjectionMatrixFOV(
+            fov=45.0,
+            aspect=1.0,
+            nearVal=0.1,
+            farVal=3.1)
+
+        width, height, rgb_img, depthImg, segImg = p.getCameraImage(
+            width=224,
+            height=224,
+            viewMatrix=viewMatrix,
+            projectionMatrix=projectionMatrix)
+
+        # convert to numpy
+        rgb_img = np.array(rgb_img)
+        rgb_img = rgb_img[:, :, :3]
+
+        self.state["image"] = rgb_img
 
         self.state['reach_count'] = sum([
             1 if ur5_state['reached_target']

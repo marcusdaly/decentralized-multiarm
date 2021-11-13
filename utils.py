@@ -380,6 +380,7 @@ def initialize_ray():
         # log_to_driver=False,
         # local_mode=False,
         # logging_level=ray.logging.ERROR
+        num_gpus=1,
     )
 
 

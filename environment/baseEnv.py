@@ -16,6 +16,8 @@ from .utils import (
 from .tasks import TaskManager
 from policy import Memory
 
+import matplotlib.pyplot as plt
+
 
 class BaseEnv:
     SIMULATION_TIMESTEP = 1.0 / 240.0
@@ -230,7 +232,6 @@ class BaseEnv:
             self.on_collision()
         self.state = {
             "ur5s": [],
-            "image": None,
         }
 
         self.state['ur5s'] = [{
@@ -247,25 +248,28 @@ class BaseEnv:
             enumerate(zip(self.active_ur5s,
                           self.task_manager.get_target_end_effector_poses()))]
 
-        # TODO make sure camera is angled at center of scene.
 
-        width, height, rgb_img, depthImg, segImg = p.getCameraImage(
-            width=128,
-            height=128,
-            viewMatrix=self.viewMatrix,
-            projectionMatrix=self.projectionMatrix)
 
-        # convert to numpy
-        rgb_img = np.array(rgb_img)
-        rgb_img = rgb_img[:, :, :3]
 
-        self.state["image"] = rgb_img
+        for ur5_idx, ur5 in enumerate(self.active_ur5s):
+            # take image above each arm
+            width, height, rgb_img, depthImg, segImg = p.getCameraImage(
+                width=64,
+                height=64,
+                viewMatrix=self.view_matrices[ur5_idx],
+                projectionMatrix=self.projection_matrices[ur5_idx])
 
-        # import matplotlib.pyplot as plt
+            # convert to numpy
+            rgb_img = np.array(rgb_img)
+            rgb_img = rgb_img[:, :, :3]
 
-        # plt.imshow(rgb_img)
-        # plt.draw()
-        # plt.pause(1e-6)
+            self.state["ur5s"][ur5_idx]["image"] = rgb_img
+
+
+            # plt.imshow(rgb_img)
+            # plt.title(ur5_idx)
+            # plt.draw()
+            # plt.pause(1)
 
         self.state['reach_count'] = sum([
             1 if ur5_state['reached_target']
@@ -376,6 +380,7 @@ class BaseEnv:
                         state['ur5s'][ur5_idx][key])
                         for state in history[-(item['history'] + 1):]]
                 obs['ur5s'][-1][key] = val
+        # print(obs)
         return obs
 
     def get_rewards(self, state):
@@ -640,23 +645,25 @@ class BaseEnv:
                 max_task_difficulty=self.max_task_difficulty,
                 min_task_difficulty=self.min_task_difficulty)
         self.enable_ur5s(count=self.get_current_task().ur5_count)
+        self.view_matrices = []
+        self.projection_matrices = []
         for ur5, ur5_task in zip(self.active_ur5s,
                                  self.get_current_task()):
+            pose = ur5_task['base_pose']
             ur5.set_pose(ur5_task['base_pose'])
             ur5.set_arm_joints(ur5_task['start_config'])
             ur5.step()
 
-
-        self.viewMatrix = p.computeViewMatrix(
-            cameraEyePosition=[0, 0, 3],
-            cameraTargetPosition=[0, 0, 0],
-            cameraUpVector=[0, 1, 0])
-
-        self.projectionMatrix = p.computeProjectionMatrixFOV(
-            fov=45.0,
-            aspect=1.0,
-            nearVal=0.1,
-            farVal=3.1)
+            eye_pos = [pose[0][0], pose[0][1], pose[0][2] + 3]
+            self.view_matrices.append(p.computeViewMatrix(
+                cameraEyePosition=eye_pos,
+                cameraTargetPosition=pose[0],
+                cameraUpVector=[0, 1, 0]))
+            self.projection_matrices.append(p.computeProjectionMatrixFOV(
+                fov=45.0,
+                aspect=1.0,
+                nearVal=0.1,
+                farVal=3.1))
 
         assert len(self.memory_cluster_map) == 1
         num_policies = 1 if self.centralized_policy else len(self.active_ur5s)

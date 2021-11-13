@@ -160,6 +160,7 @@ def parse_args():
 
 
 def get_device():
+    # return 'cpu'
     if not torch.cuda.is_available():
         return 'cpu'
     return 'cuda'

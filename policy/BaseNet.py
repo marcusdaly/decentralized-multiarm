@@ -116,6 +116,7 @@ class BaseNet(nn.Module):
             input,
             self.init_hidden_fn(
                 batch_size=input.size(0),
+                # device="cpu"))
                 device=input.device))
         if self.seq_net_class == nn.LSTM:
             (h_t, _) = h_t

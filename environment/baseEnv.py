@@ -53,6 +53,7 @@ class BaseEnv:
         self.simulation_steps_per_action_step = int(
             self.action_interval / BaseEnv.SIMULATION_TIMESTEP)
         self.episode_counts = 0
+        self.start_time = time.time()
         self.action_type = 'delta'\
             if 'action_type' not in env_config \
             else env_config['action_type']
@@ -247,28 +248,24 @@ class BaseEnv:
                           self.task_manager.get_target_end_effector_poses()))]
 
         # TODO make sure camera is angled at center of scene.
-        viewMatrix = p.computeViewMatrix(
-            cameraEyePosition=[0, 0, 3],
-            cameraTargetPosition=[0, 0, 0],
-            cameraUpVector=[0, 1, 0])
-
-        projectionMatrix = p.computeProjectionMatrixFOV(
-            fov=45.0,
-            aspect=1.0,
-            nearVal=0.1,
-            farVal=3.1)
 
         width, height, rgb_img, depthImg, segImg = p.getCameraImage(
-            width=224,
-            height=224,
-            viewMatrix=viewMatrix,
-            projectionMatrix=projectionMatrix)
+            width=128,
+            height=128,
+            viewMatrix=self.viewMatrix,
+            projectionMatrix=self.projectionMatrix)
 
         # convert to numpy
         rgb_img = np.array(rgb_img)
         rgb_img = rgb_img[:, :, :3]
 
         self.state["image"] = rgb_img
+
+        # import matplotlib.pyplot as plt
+
+        # plt.imshow(rgb_img)
+        # plt.draw()
+        # plt.pause(1e-6)
 
         self.state['reach_count'] = sum([
             1 if ur5_state['reached_target']
@@ -571,6 +568,7 @@ class BaseEnv:
         self.task_manager.on_success()
 
     def on_episode_end(self):
+        # print(self.tot_time / self.episode_counts)
         success = self.stats['collective_reach_count']\
             if sum(self.stats['collisions']) == 0\
             else 0
@@ -603,6 +601,7 @@ class BaseEnv:
         self.history = []
         self.current_step = 0
         self.episode_counts += 1
+        self.tot_time = time.time() - self.start_time
         self.finish_task_in_episode = False
         self.setup_task()
         self.reset_memories()
@@ -646,6 +645,19 @@ class BaseEnv:
             ur5.set_pose(ur5_task['base_pose'])
             ur5.set_arm_joints(ur5_task['start_config'])
             ur5.step()
+
+
+        self.viewMatrix = p.computeViewMatrix(
+            cameraEyePosition=[0, 0, 3],
+            cameraTargetPosition=[0, 0, 0],
+            cameraUpVector=[0, 1, 0])
+
+        self.projectionMatrix = p.computeProjectionMatrixFOV(
+            fov=45.0,
+            aspect=1.0,
+            nearVal=0.1,
+            farVal=3.1)
+
         assert len(self.memory_cluster_map) == 1
         num_policies = 1 if self.centralized_policy else len(self.active_ur5s)
         self.episode_policy_instance_keys = [

@@ -8,14 +8,28 @@ class BaseNet(nn.Module):
     def __init__(self,
                  input_dim,
                  output_dim,
+                 obs_img_width,
                  network_config,
                  activation_func=nn.Tanh):
         super(BaseNet, self).__init__()
         self.activation_func = activation_func
         self.output_dim = output_dim
         self.input_dim = input_dim
+        self.obs_img_width = obs_img_width
         self.network_config = network_config
         self.sequence_input = False
+
+        self.img_encoder = nn.Sequential(
+            nn.Conv2d(in_channels=3,out_channels=3,kernel_size=5, stride=1, bias=False),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=3,out_channels=3,kernel_size=5, stride=1, bias=False),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(int(int((obs_img_width - 4) / 2 - 4) / 2 ) **2 * 3, 32), # TODO dont hardcode.
+            nn.Tanh(),
+        )
 
         if 'lstm' in self.network_config['modules'] or \
                 'rnn' in self.network_config['modules']:
@@ -111,6 +125,14 @@ class BaseNet(nn.Module):
         return layers
 
     def process_sequence(self, input):
+        flat, img = input
+
+        # first, each arm's image through CNN
+        encoded_imgs = torch.stack([self.img_encoder(img[arm,:,:,:,:]) for arm in range(img.shape[0])])
+
+        # now, concat flat inputs with encoded img
+        input = torch.cat([flat, encoded_imgs], dim=-1)
+
         self.seq_net.flatten_parameters()
         _, h_t = self.seq_net(
             input,
@@ -132,6 +154,7 @@ class StochasticActor(BaseNet):
     def __init__(self,
                  obs_dim,
                  action_dim,
+                 obs_img_width,
                  action_variance_bounds,
                  network_config):
         self.action_dim = action_dim
@@ -145,6 +168,7 @@ class StochasticActor(BaseNet):
         super(StochasticActor, self).__init__(
             input_dim=obs_dim,
             output_dim=action_dim * 2,
+            obs_img_width=obs_img_width,
             network_config=network_config)
 
     def get_layers(self):
@@ -206,6 +230,7 @@ class Critic(BaseNet):
 class Q(BaseNet):
     def __init__(self,
                  obs_dim,
+                 obs_img_width,
                  action_dim,
                  network_config):
         self.obs_dim = obs_dim
@@ -213,6 +238,7 @@ class Q(BaseNet):
         super(Q, self).__init__(
             input_dim=obs_dim,
             output_dim=1,
+            obs_img_width=obs_img_width,
             network_config=network_config)
 
     def get_mlp_input_dim(self):

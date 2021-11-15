@@ -9,6 +9,7 @@ import traceback
 from .UR5 import UR5
 from .utils import (
     get_observation_dimensions,
+    get_observation_img_width,
     create_ur5s,
     pose_to_high_freq_pose,
     pos_to_high_freq_pos
@@ -42,9 +43,11 @@ class BaseEnv:
 
         self.observation_items = observations_config['items']
         observation_dim = get_observation_dimensions(observations_config)
+        img_observation_width = get_observation_img_width(observations_config)
 
         self.actor_observation_dim = observation_dim
         self.critic_observation_dim = observation_dim
+        self.img_observation_width = img_observation_width
 
     def set_memory_cluster_map(self, memory_cluster_map):
         self.memory_cluster_map = memory_cluster_map
@@ -341,46 +344,50 @@ class BaseEnv:
             ur5_idx = self.active_ur5s.index(ur5)
             for item in self.observation_items:
                 key = item['name']
-                val = None
-                high_freq = 'high_freq' in key
-                key = key.split('_high_freq')[0]
-                if key == 'joint_values':
+                if key == "image":
                     val = [state['ur5s'][ur5_idx][key]
                            for state in history[-(item['history'] + 1):]]
-                elif 'link_positions' in key:
-                    # get flatten link positions in ur5's frame of reference
-                    val = [list(chain.from_iterable(
-                        [pos_to_high_freq_pos(this_ur5.global_to_ur5_frame(
-                            position=np.array(link_pos),
-                            rotation=None)[0])
-                         if high_freq else
-                            this_ur5.global_to_ur5_frame(
-                            position=np.array(link_pos),
-                            rotation=None)[0]
-                         for link_pos in state['ur5s'][ur5_idx][key]]))
-                        for state in history[-(item['history'] + 1):]]
-                elif 'end_effector_pose' in key or \
-                        'target_pose' in key\
-                        or key == 'pose' or key == 'pose_high_freq':
-                    val = [list(chain.from_iterable(
-                        pose_to_high_freq_pose(
+                    obs["ur5s"][-1][key] = val
+                else:
+                    val = None
+                    high_freq = 'high_freq' in key
+                    key = key.split('_high_freq')[0]
+                    if key == 'joint_values':
+                        val = [state['ur5s'][ur5_idx][key]
+                               for state in history[-(item['history'] + 1):]]
+                    elif 'link_positions' in key:
+                        # get flatten link positions in ur5's frame of reference
+                        val = [list(chain.from_iterable(
+                            [pos_to_high_freq_pos(this_ur5.global_to_ur5_frame(
+                                position=np.array(link_pos),
+                                rotation=None)[0])
+                             if high_freq else
+                                this_ur5.global_to_ur5_frame(
+                                position=np.array(link_pos),
+                                rotation=None)[0]
+                             for link_pos in state['ur5s'][ur5_idx][key]]))
+                            for state in history[-(item['history'] + 1):]]
+                    elif 'end_effector_pose' in key or \
+                            'target_pose' in key\
+                            or key == 'pose' or key == 'pose_high_freq':
+                        val = [list(chain.from_iterable(
+                            pose_to_high_freq_pose(
+                                this_ur5.global_to_ur5_frame(
+                                    position=state['ur5s'][ur5_idx][key][0],
+                                    rotation=state['ur5s'][ur5_idx][key][1]))
+                            if high_freq else
                             this_ur5.global_to_ur5_frame(
                                 position=state['ur5s'][ur5_idx][key][0],
-                                rotation=state['ur5s'][ur5_idx][key][1]))
-                        if high_freq else
-                        this_ur5.global_to_ur5_frame(
-                            position=state['ur5s'][ur5_idx][key][0],
-                            rotation=state['ur5s'][ur5_idx][key][1])))
-                           for state in history[-(item['history'] + 1):]]
-                else:
-                    val = [pose_to_high_freq_pose(this_ur5.global_to_ur5_frame(
-                        state['ur5s'][ur5_idx][key]))
-                        if high_freq else
-                        this_ur5.global_to_ur5_frame(
-                        state['ur5s'][ur5_idx][key])
-                        for state in history[-(item['history'] + 1):]]
-                obs['ur5s'][-1][key] = val
-        # print(obs)
+                                rotation=state['ur5s'][ur5_idx][key][1])))
+                               for state in history[-(item['history'] + 1):]]
+                    else:
+                        val = [pose_to_high_freq_pose(this_ur5.global_to_ur5_frame(
+                            state['ur5s'][ur5_idx][key]))
+                            if high_freq else
+                            this_ur5.global_to_ur5_frame(
+                            state['ur5s'][ur5_idx][key])
+                            for state in history[-(item['history'] + 1):]]
+                    obs['ur5s'][-1][key] = val
         return obs
 
     def get_rewards(self, state):
@@ -735,20 +742,35 @@ class BaseEnv:
 
     def preprocess_obs(self, obs):
         output = []
+        img_output = []
         for ur5_obs in obs['ur5s']:
             ur5_output = np.array([])
             for key in self.obs_key:
                 key = key.split('_high_freq')[0]
-                item = ur5_obs[key]
-                for history_frame in item:
-                    ur5_output = np.concatenate((
-                        ur5_output,
-                        history_frame))
+                if key != "image":
+                    item = ur5_obs[key]
+                    for history_frame in item:
+                        ur5_output = np.concatenate((
+                            ur5_output,
+                            history_frame))
+                else:
+                    img = ur5_obs[key][0] # take first for no history.
+                    img_output.append(img)
+                    # print("img input: ", img.shape)
             output.append(ur5_output)
         output = torch.FloatTensor(output)
+
+        # channels before h/w
+        img_output = torch.permute(torch.FloatTensor(img_output), (0, 3, 1, 2))
+
+        # if (img_output.shape[0] > 1):
+        #     print("EQUAL?", torch.equal(img_output[0,:,:,:], img_output[1,:,:,:]))
+
+        # print(output.shape)
+        # print(img_output.shape)
         if self.centralized_policy:
             output = output.view(-1)
-        return output
+        return output, img_output
 
     def setup_ray(self, id):
         print("[BaseEnv] Setting up ray: {}".format(id))

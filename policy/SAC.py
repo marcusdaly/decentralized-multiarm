@@ -157,9 +157,17 @@ class SACLearner(BaseRLAlgo):
 
             def act(self, obs):
                 self.check_update()
-                obs = pad_sequence(obs, batch_first=True).to(self.device)
-                if len(obs) == 1:
-                    obs = torch.unsqueeze(obs[0], dim=0)
+
+                # one observation corresponding to each arm's obs.
+                flat_obs= [ob[0] for ob in obs]
+                img_obs= [ob[1] for ob in obs]
+                flat_obs = pad_sequence(flat_obs, batch_first=True).to(self.device)
+                img_obs = torch.stack(img_obs).to(self.device)
+                if len(flat_obs) == 1:
+                    flat_obs = torch.unsqueeze(flat_obs[0], dim=0)
+                if len(img_obs) == 1:
+                    img_obs = torch.unsqueeze(img_obs[0], dim=0)
+                obs = flat_obs, img_obs
                 actions, _ = self.policy(
                     obs, deterministic=self.deterministic,
                     reparametrize=self.reparametrize)

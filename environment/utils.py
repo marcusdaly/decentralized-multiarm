@@ -109,6 +109,9 @@ def get_observation_dimensions(observations_config):
             (observation_item['history'] + 1)
     return observation_dim
 
+def get_observation_img_width(observations_config):
+    return observations_config["items"][-1]['width']
+
 
 def ur5_reached_target_pose(ur5, target_pose,
                             position_tolerance,

@@ -11,7 +11,7 @@ from environment import (
     RRTSupervisionEnv,
     TaskLoader
 )
-from environment.utils import get_observation_dimensions
+from environment.utils import get_observation_dimensions, get_observation_img_width
 import torch
 from tensorboardX import SummaryWriter
 from policy import (
@@ -55,7 +55,7 @@ def load_config(path, merge_with_default=True):
 
     if os.path.splitext(os.path.basename(path))[0] != 'default'\
             and merge_with_default:
-        config = load(open(dirname(path) + '/default.json'))
+        config = load(open(dirname(path) + '/image_default.json'))
         additional_config = load(open(path))
         config = merge(config, additional_config)
     else:
@@ -171,6 +171,7 @@ def create_policies(args,
                     action_dim,
                     actor_obs_dim,
                     critic_obs_dim,
+                    obs_img_width,
                     training,
                     logger,
                     device=None):
@@ -182,6 +183,7 @@ def create_policies(args,
         return StochasticActor(
             obs_dim=actor_obs_dim,
             action_dim=action_dim,
+            obs_img_width=obs_img_width,
             action_variance_bounds=training_config['action_variance'],
             network_config=training_config['network']['actor'])
 
@@ -190,6 +192,7 @@ def create_policies(args,
                  if training_config['centralized_critic']
                  else critic_obs_dim,
                  action_dim=action_dim,
+                 obs_img_width=obs_img_width,
                  network_config=training_config['network']['critic'])
 
     policy_manager = PolicyManager()
@@ -485,6 +488,7 @@ def setup(args, config):
         training_config['centralized_policy'] = False
 
     obs_dim = get_observation_dimensions(training_config['observations'])
+    obs_img_width = get_observation_img_width(training_config['observations'])
     action_dim = 6
     if training_config['centralized_policy']:
         obs_dim *= env_config['max_ur5s_count']
@@ -495,6 +499,7 @@ def setup(args, config):
         action_dim=action_dim,
         actor_obs_dim=obs_dim,
         critic_obs_dim=obs_dim,
+        obs_img_width=obs_img_width,
         training=args.mode == 'train',
         logger=logger)
     for e in envs:

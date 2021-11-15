@@ -26,6 +26,12 @@
                     "name": "pose",
                     "dimensions": 7,
                     "history": 0
+                },
+                {
+                    "name": "image",
+                    "width": 64,
+                    "dimensions": 32,
+                    "history": 0
                 }
             ]
         },

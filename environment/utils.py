@@ -110,7 +110,10 @@ def get_observation_dimensions(observations_config):
     return observation_dim
 
 def get_observation_img_width(observations_config):
-    return observations_config["items"][-1]['width']
+    return observations_config["image"]["width"]
+
+def get_img_encoding_dimensions(observations_config):
+    return observations_config["image"]["encoding_dim"]
 
 
 def ur5_reached_target_pose(ur5, target_pose,

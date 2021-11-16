@@ -9,6 +9,7 @@ class BaseNet(nn.Module):
                  input_dim,
                  output_dim,
                  obs_img_width,
+                 img_encoding_dim,
                  network_config,
                  activation_func=nn.Tanh):
         super(BaseNet, self).__init__()
@@ -16,19 +17,27 @@ class BaseNet(nn.Module):
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.obs_img_width = obs_img_width
+        self.img_encoding_dim = img_encoding_dim
         self.network_config = network_config
         self.sequence_input = False
 
         self.img_encoder = nn.Sequential(
-            nn.Conv2d(in_channels=3,out_channels=3,kernel_size=5, stride=1, bias=False),
+            nn.Conv2d(in_channels=3,out_channels=8,kernel_size=3, stride=1, bias=False, padding="same"),
+            nn.Conv2d(in_channels=8,out_channels=8,kernel_size=3, stride=1, bias=False, padding="same"),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.ReLU(),
-            nn.Conv2d(in_channels=3,out_channels=3,kernel_size=5, stride=1, bias=False),
+            nn.Conv2d(in_channels=8,out_channels=16,kernel_size=3, stride=1, bias=False, padding="same"),
+            nn.Conv2d(in_channels=16,out_channels=16,kernel_size=3, stride=1, bias=False, padding="same"),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.ReLU(),
+            nn.Conv2d(in_channels=16,out_channels=16,kernel_size=3, stride=1, bias=False, padding="same"),
+            nn.Conv2d(in_channels=16,out_channels=16,kernel_size=3, stride=1, bias=False, padding="same"),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=16,out_channels=1,kernel_size=3, stride=1, bias=False, padding="same"),
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Flatten(),
-            nn.Linear(int(int((obs_img_width - 4) / 2 - 4) / 2 ) **2 * 3, 32), # TODO dont hardcode.
-            nn.Tanh(),
+            nn.ReLU(),
         )
 
         if 'lstm' in self.network_config['modules'] or \
@@ -97,7 +106,7 @@ class BaseNet(nn.Module):
 
     def get_mlp_input_dim(self):
         if self.sequence_input:
-            return self.hidden_size
+            return self.img_encoding_dim + self.hidden_size
         else:
             return self.input_dim
 
@@ -125,13 +134,6 @@ class BaseNet(nn.Module):
         return layers
 
     def process_sequence(self, input):
-        flat, img = input
-
-        # first, each arm's image through CNN
-        encoded_imgs = torch.stack([self.img_encoder(img[arm,:,:,:,:]) for arm in range(img.shape[0])])
-
-        # now, concat flat inputs with encoded img
-        input = torch.cat([flat, encoded_imgs], dim=-1)
 
         self.seq_net.flatten_parameters()
         _, h_t = self.seq_net(
@@ -145,9 +147,11 @@ class BaseNet(nn.Module):
         return torch.squeeze(h_t, dim=0)
 
     def forward(self, input):
+        seq_obs, img_obs = input
         if self.sequence_input:
-            input = self.process_sequence(input)
-        return self.net(input)
+            seq_obs = self.process_sequence(seq_obs)
+        img_encoding = self.img_encoder(img_obs)
+        return self.net(torch.cat((img_encoding, seq_obs), dim=-1))
 
 
 class StochasticActor(BaseNet):
@@ -155,6 +159,7 @@ class StochasticActor(BaseNet):
                  obs_dim,
                  action_dim,
                  obs_img_width,
+                 img_encoding_dim,
                  action_variance_bounds,
                  network_config):
         self.action_dim = action_dim
@@ -169,6 +174,7 @@ class StochasticActor(BaseNet):
             input_dim=obs_dim,
             output_dim=action_dim * 2,
             obs_img_width=obs_img_width,
+            img_encoding_dim=img_encoding_dim,
             network_config=network_config)
 
     def get_layers(self):
@@ -231,6 +237,7 @@ class Q(BaseNet):
     def __init__(self,
                  obs_dim,
                  obs_img_width,
+                 img_encoding_dim,
                  action_dim,
                  network_config):
         self.obs_dim = obs_dim
@@ -239,15 +246,18 @@ class Q(BaseNet):
             input_dim=obs_dim,
             output_dim=1,
             obs_img_width=obs_img_width,
+            img_encoding_dim=img_encoding_dim,
             network_config=network_config)
 
     def get_mlp_input_dim(self):
         if self.sequence_input:
-            return self.hidden_size + self.action_dim
+            return self.img_encoding_dim + self.hidden_size + self.action_dim
         return self.action_dim + self.obs_dim
 
     def forward(self, obs, actions):
+        print(obs)
         if self.sequence_input:
-            obs = self.process_sequence(obs)
-            obs = torch.squeeze(obs, dim=1)
-        return self.net(torch.cat((obs, actions), 1))
+            seq_obs, flat_obs = obs
+            seq_obs = self.process_sequence(seq_obs)
+            seq_obs = torch.squeeze(seq_obs, dim=1)
+        return self.net(torch.cat((flat_obs, obs, actions), 1))

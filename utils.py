@@ -11,7 +11,7 @@ from environment import (
     RRTSupervisionEnv,
     TaskLoader
 )
-from environment.utils import get_observation_dimensions, get_observation_img_width
+from environment.utils import get_observation_dimensions, get_observation_img_width, get_img_encoding_dimensions
 import torch
 from tensorboardX import SummaryWriter
 from policy import (
@@ -172,6 +172,7 @@ def create_policies(args,
                     actor_obs_dim,
                     critic_obs_dim,
                     obs_img_width,
+                    img_encoding_dim,
                     training,
                     logger,
                     device=None):
@@ -184,6 +185,7 @@ def create_policies(args,
             obs_dim=actor_obs_dim,
             action_dim=action_dim,
             obs_img_width=obs_img_width,
+            img_encoding_dim=img_encoding_dim,
             action_variance_bounds=training_config['action_variance'],
             network_config=training_config['network']['actor'])
 
@@ -193,6 +195,7 @@ def create_policies(args,
                  else critic_obs_dim,
                  action_dim=action_dim,
                  obs_img_width=obs_img_width,
+                 img_encoding_dim=img_encoding_dim,
                  network_config=training_config['network']['critic'])
 
     policy_manager = PolicyManager()
@@ -489,6 +492,7 @@ def setup(args, config):
 
     obs_dim = get_observation_dimensions(training_config['observations'])
     obs_img_width = get_observation_img_width(training_config['observations'])
+    img_encoding_dim = get_img_encoding_dimensions(training_config['observations'])
     action_dim = 6
     if training_config['centralized_policy']:
         obs_dim *= env_config['max_ur5s_count']
@@ -500,6 +504,7 @@ def setup(args, config):
         actor_obs_dim=obs_dim,
         critic_obs_dim=obs_dim,
         obs_img_width=obs_img_width,
+        img_encoding_dim=img_encoding_dim,
         training=args.mode == 'train',
         logger=logger)
     for e in envs:

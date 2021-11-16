@@ -26,14 +26,12 @@
                     "name": "pose",
                     "dimensions": 7,
                     "history": 0
-                },
-                {
-                    "name": "image",
-                    "width": 16,
-                    "dimensions": 32,
-                    "history": 0
                 }
-            ]
+            ],
+            "image": {
+                "width": 64,
+                "encoding_dim": 16
+            }
         },
         "action_variance": {
             "max": 0.1,

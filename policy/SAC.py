@@ -22,6 +22,7 @@ class SACLearner(BaseRLAlgo):
             writer,
             load_path=None,
             device='cuda',
+            # device='cpu',
             training=True,
             save_interval=500):
         super().__init__(

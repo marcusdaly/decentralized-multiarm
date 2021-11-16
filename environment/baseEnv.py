@@ -257,8 +257,8 @@ class BaseEnv:
         for ur5_idx, ur5 in enumerate(self.active_ur5s):
             # take image above each arm
             width, height, rgb_img, depthImg, segImg = p.getCameraImage(
-                width=64,
-                height=64,
+                width=16,
+                height=16,
                 viewMatrix=self.view_matrices[ur5_idx],
                 projectionMatrix=self.projection_matrices[ur5_idx])
 

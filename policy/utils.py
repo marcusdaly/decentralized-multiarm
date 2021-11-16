@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 from torch import tensor, cat, stack, FloatTensor, Tensor, save
 import ray
 from torch.nn.utils.rnn import pad_sequence
+import torch
 from tqdm import tqdm
 import pickle
 from pathlib import Path
@@ -67,7 +68,13 @@ class ReplayBufferDataset(Dataset):
         self.next_observations_padded = None
 
     def pad_observations(self, input):
-        return pad_sequence(input, batch_first=True)
+        # print(input)
+        flat_obs= [ob[0] for ob in input]
+        img_obs= [ob[1] for ob in input]
+        flat_obs = pad_sequence(flat_obs, batch_first=True)
+        img_obs = pad_sequence(img_obs, batch_first=True)
+        observations = [(flat_obs[i], img_obs[i]) for i in range(flat_obs.shape[0])]
+        return observations
 
     def __getitem__(self, idx):
         if self.observations_padded is None or\
@@ -89,31 +96,37 @@ class ReplayBufferDataset(Dataset):
                     self.next_observations_padded
         if 'critic_observations' in self.data:
             return (
-                self.critic_observations_padded[idx].to(
-                    self.device, non_blocking=True),
-                self.observations_padded[idx].to(
-                    self.device, non_blocking=True),
+                (self.critic_observations_padded[idx][0].to(
+                    self.device, non_blocking=True), self.critic_observations_padded[idx][1].to(
+                    self.device, non_blocking=True)),
+                (self.observations_padded[idx][0].to(
+                    self.device, non_blocking=True), self.observations_padded[idx][1].to(
+                    self.device, non_blocking=True)),
                 self.data['actions'][idx].to(
                     self.device, non_blocking=True),
                 tensor(float(self.data['rewards'][idx])).to(
                     self.device, non_blocking=True),
-                self.critic_next_observations_padded[idx].to(
-                    self.device, non_blocking=True),
-                self.next_observations_padded[idx].to(
-                    self.device, non_blocking=True),
+                (self.critic_next_observations_padded[idx][0].to(
+                    self.device, non_blocking=True), self.critic_next_observations_padded[idx][1].to(
+                    self.device, non_blocking=True)),
+                (self.next_observations_padded[idx][0].to(
+                    self.device, non_blocking=True), self.next_observations_padded[idx][1].to(
+                    self.device, non_blocking=True)),
                 tensor(float(self.data['is_terminal'][idx])).to(
                     self.device, non_blocking=True)
             )
         else:
             return (
-                self.observations_padded[idx].to(
-                    self.device, non_blocking=True),
+                (self.observations_padded[idx][0].to(
+                    self.device, non_blocking=True), self.observations_padded[idx][1].to(
+                    self.device, non_blocking=True)),
                 self.data['actions'][idx].to(
                     self.device, non_blocking=True),
                 tensor(float(self.data['rewards'][idx])).to(
                     self.device, non_blocking=True),
-                self.next_observations_padded[idx].to(
-                    self.device, non_blocking=True),
+                (self.next_observations_padded[idx][0].to(
+                    self.device, non_blocking=True), self.next_observations_padded[idx][1].to(
+                    self.device, non_blocking=True)),
                 tensor(float(self.data['is_terminal'][idx])).to(
                     self.device, non_blocking=True)
             )

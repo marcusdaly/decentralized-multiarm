@@ -29,7 +29,7 @@
                 },
                 {
                     "name": "image",
-                    "width": 64,
+                    "width": 16,
                     "dimensions": 32,
                     "history": 0
                 }

@@ -255,9 +255,9 @@ class Q(BaseNet):
         return self.action_dim + self.obs_dim
 
     def forward(self, obs, actions):
-        print(obs)
+        seq_obs, img_obs = obs
         if self.sequence_input:
-            seq_obs, flat_obs = obs
             seq_obs = self.process_sequence(seq_obs)
             seq_obs = torch.squeeze(seq_obs, dim=1)
-        return self.net(torch.cat((flat_obs, obs, actions), 1))
+        img_encoding = self.img_encoder(img_obs)
+        return self.net(torch.cat((img_encoding, seq_obs, actions), 1))

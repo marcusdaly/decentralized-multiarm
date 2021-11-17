@@ -758,7 +758,7 @@ class BaseEnv:
                         ur5_output,
                         history_frame))
             output.append(ur5_output)
-        output = torch.FloatTensor(output)
+        output = torch.FloatTensor(np.array(output))
 
         img_output = obs["image"]
 

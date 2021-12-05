@@ -275,9 +275,12 @@ class TaskManager:
                         max_task_ur5s_count,
                         min_task_ur5s_count,
                         max_task_difficulty,
-                        min_task_difficulty):
+                        min_task_difficulty,
+                        expert_mode=False):
         if self.use_task_loader:
-            while True:
+            num_tasks_seen = 0
+            while num_tasks_seen <= len(ray.get(self.task_loader.get_files.remote())):
+                num_tasks_seen += 1
                 self.current_task = ray.get(
                     self.task_loader.get_next_task.remote())
                 task_difficulty = self.current_task.difficulty
@@ -286,6 +289,14 @@ class TaskManager:
                     and task_difficulty >= min_task_difficulty\
                         and task_difficulty <= max_task_difficulty:
                     break
+
+                # if already have it, skip it!
+                if expert_mode:
+                    if os.path.exists(os.path.join("expert_episodes", f"{self.current_task.id}.pt")):
+                        break
+            if num_tasks_seen > len(ray.get(self.task_loader.get_files.remote())):
+                print("DONE GETTING EXPERT EPISODES")
+                exit(0)
         else:
             self.current_task = ray.get(
                 self.target_env.create_task.remote())
@@ -316,7 +327,8 @@ class ProxyTaskManager(TaskManager):
                         max_task_ur5s_count,
                         min_task_ur5s_count,
                         max_task_difficulty,
-                        min_task_difficulty):
+                        min_task_difficulty,
+                        expert_mode=False):
         pass
 
     def setup(self):
@@ -364,6 +376,9 @@ class TaskLoader:
 
     def get_num_targets(self):
         return len(self.files)
+
+    def get_files(self):
+        return self.files
 
     def get_next_task(self):
         if self.current_idx >= len(self.files)\

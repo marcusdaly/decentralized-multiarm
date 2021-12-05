@@ -656,7 +656,8 @@ class BaseEnv:
                 max_task_ur5s_count=self.max_task_ur5s_count,
                 min_task_ur5s_count=self.min_task_ur5s_count,
                 max_task_difficulty=self.max_task_difficulty,
-                min_task_difficulty=self.min_task_difficulty)
+                min_task_difficulty=self.min_task_difficulty,
+                expert_mode=True)
         self.enable_ur5s(count=self.get_current_task().ur5_count)
         self.view_matrices = []
         self.projection_matrices = []

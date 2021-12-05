@@ -74,6 +74,46 @@ def simulate(args, config):
         print('\r{:02d}'.format(len(observations)), end='')
 
 
+def generate_expert_dataset(args, config):
+    envs, policy_manager, keep_alive = setup(args, config)
+    signal(SIGINT, lambda sig, frame: exit_handler(
+        [value['exit_handler'] for key, value in keep_alive.items()
+         if value['exit_handler'] is not None]))
+
+    while(True):
+        reset = ray.get([e.reset.remote() for e in envs])
+        episodes = ray.get([e.save_expert_episode.remote() for e in envs])
+
+
+
+    # observations = ray.get([e.reset.remote() for e in envs])
+    # observations = [obs for obs, _ in observations]
+    #
+    # inference_policies = policy_manager.get_inference_nodes()
+    # multiarm_motion_planner = inference_policies['multiarm_motion_planner']
+    #
+    # remaining_observations = []
+    # ready_envs = copy(envs)
+    #
+    # while(True):
+    #     env_actions = [multiarm_motion_planner.act(
+    #         observation['multiarm_motion_planner'])
+    #         for observation in observations]
+    #     ready_envs, observations, remaining_observations = step_env(
+    #         all_envs=envs,
+    #         ready_envs=ready_envs,
+    #         ready_actions=env_actions,
+    #         remaining_observations=remaining_observations)
+    #     print('\r{:02d}'.format(len(observations)), end='')
+
+
+    # iterate through the expert waypoints
+    # for args["expert_waypoints"]
+
+    # perform the actions according to the waypoints while recording data
+
+    # save data for this expert demonstration episode
+
 if __name__ == "__main__":
     args = parse_args()
     config = load_config(args.config)
@@ -84,3 +124,7 @@ if __name__ == "__main__":
     elif args.mode == 'behaviour-clone':
         signal(SIGINT, lambda sig, frame: exit_handler(None))
         setup(args, config)()
+
+    # generate the expert dataset from waypoints
+    elif args.mode == 'expert':
+        generate_expert_dataset(args, config)

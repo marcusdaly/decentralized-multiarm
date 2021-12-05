@@ -6,6 +6,8 @@ import numpy as np
 from .UR5 import UR5
 import pybullet as p
 import quaternion
+import os
+import torch
 
 
 class Target:
@@ -184,7 +186,8 @@ def perform_expert_actions_variable_threshold(
         threshold,
         max_action,
         action_type,
-        log=False):
+        log=False,
+        return_entire_episode=False):
     def done():
         return ur5s_at_waypoint(
             env.active_ur5s,
@@ -194,8 +197,10 @@ def perform_expert_actions_variable_threshold(
     curr_j = np.array(list(chain.from_iterable(
         [ur5.get_arm_joint_values() for ur5 in env.active_ur5s])))
     rv = None
-    while (not env.terminate_episode) and \
-            (not done()):
+
+    if return_entire_episode:
+        episode = []
+    while (not env.terminate_episode) and (not done()):
 
         # Closest waypoint ahead of current
         next_j = expert_waypoints[next_wp_idx]
@@ -230,7 +235,19 @@ def perform_expert_actions_variable_threshold(
             centralized_policy=env.centralized_policy,
             action_type=action_type)
 
+        state = env.state
+
         rv = env.step(actions)
+
+        if return_entire_episode:
+            new_state = env.state
+            rewards = env.get_rewards(new_state)
+            # print("rv", rv)
+            # print("state", state)
+            # print("new_state", new_state)
+            # print("actions", actions)
+            # print('rewards', rewards)
+            episode.append((state, actions, new_state, rewards))
 
         curr_j = np.array(list(chain.from_iterable(
             [ur5.get_arm_joint_values() for ur5 in env.active_ur5s])))
@@ -244,6 +261,18 @@ def perform_expert_actions_variable_threshold(
             next_wp_idx += 1
     if env.current_step >= env.episode_length and log:
         print("expert out of time!")
+
+    if return_entire_episode:
+        for exp in episode:
+            for ur5 in exp[0]["ur5s"]:
+                if "ur5" in ur5:
+                    del ur5["ur5"]
+
+            for ur5 in exp[2]["ur5s"]:
+                if "ur5" in ur5:
+                    del ur5["ur5"]
+
+        return episode
     return rv
 
 
@@ -270,10 +299,32 @@ def perform_expert_actions_fixed_threshold(
     return rv
 
 
+def save_expert_episode(env, expert_waypoints, expert_config, task_id):
+    tolerance_config = expert_config['tolerance_config']
+    episode = perform_expert_actions_variable_threshold(
+        env=env,
+        expert_waypoints=expert_waypoints,
+        joint_tolerance=tolerance_config['tolerance'],
+        threshold=tolerance_config['threshold'],
+        max_action=tolerance_config['max_magnitude'],
+        action_type=env.action_type,
+        return_entire_episode=True)
+
+    print("EP LEN", len(episode))
+
+    print(f"saving {task_id}")
+    path = os.path.join("expert_episodes", f"{task_id}.pt")
+    torch.save(episode, path)
+
+
+
+
+
 def perform_expert_actions(
         env,
         expert_waypoints,
         expert_config):
+    print("PERFORMING EXPERT ACTIONS (UH OH)")
     if expert_config['waypoint_conversion_mode'] == 'tolerance':
         # Variable threshold
         tolerance_config = expert_config['tolerance_config']

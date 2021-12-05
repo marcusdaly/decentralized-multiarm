@@ -117,6 +117,12 @@ class SACLearner(BaseRLAlgo):
                     num_workers=0)
             else:
                 self.replay_buffer.extend(data)
+                # print("EXTENDING DATA WITH", len(data))
+                # for i, x in enumerate(data):
+                #     print(f"{i}: {x}, {type(data[x])}, {len(data[x])}")
+                #     if len(data[x]) > 0:
+                #         print(data[x][0])
+                # exit(0)
         self.register_async_task(
             name='memory_cluster',
             fn=self.memory_cluster.get_data.remote,

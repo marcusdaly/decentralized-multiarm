@@ -9,6 +9,7 @@ from environment import (
     BenchmarkEnv,
     RRTWrapper,
     RRTSupervisionEnv,
+    RRTOnlyEnv,
     TaskLoader
 )
 from environment.utils import get_observation_dimensions, get_observation_img_width, get_img_encoding_dimensions
@@ -91,6 +92,8 @@ def parse_args():
                             'enjoy',
                             # 4. Load pretrained policy
                             'benchmark',
+                            # 5. generate expert episodes
+                            'expert',
                         ],
                         default='train')
     parser.add_argument('--expert_waypoints', type=str,
@@ -423,6 +426,10 @@ def prepare_logger(args, config):
             benchmark_mode=True,
             benchmark_name=args.name
         )
+    elif args.mode == 'expert':
+        logger = Logger.remote(
+            logdir="expert_log/"
+        )
     return logger
 
 
@@ -441,6 +448,9 @@ def setup(args, config):
         Env = BaseEnv
     elif args.mode == 'benchmark':
         Env = BenchmarkEnv
+    elif args.mode == 'expert':
+        Env = RRTOnlyEnv
+        env_config['expert_root_dir'] = args.expert_waypoints
     elif env_config['expert']['expert_on_fail']:
         Env = RRTSupervisionEnv
         env_config['expert_root_dir'] = args.expert_waypoints

@@ -345,6 +345,8 @@ class TaskLoader:
                 self.files = [abspath(root_dir + file_path.rstrip())
                               for file_path in f.readlines()]
         else:
+            print(root_dir + 'all.txt')
+            exit(0)
             self.files = [abspath(file_name)
                           for file_name in Path(root_dir).rglob('*.json')
                           if 'config' not in str(file_name)]

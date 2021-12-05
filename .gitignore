@@ -140,3 +140,5 @@ dmypy.json
 runs/
 expert/
 tasks/
+expert_log/
+expert_episodes/

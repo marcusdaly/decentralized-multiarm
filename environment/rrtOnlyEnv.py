@@ -65,6 +65,7 @@ class RRTOnlyEnv(BaseEnv):
         return rrt_waypoints
 
     def save_expert_episode(self):
+        self.reset()
         self.reset_task()
         task_id = self.get_current_task().id
 
@@ -83,6 +84,8 @@ class RRTOnlyEnv(BaseEnv):
             expert_config=self.expert_config,
             task_id = task_id
         )
+
+        return None, self.ray_id
 
 
         # if rrt_waypoints is None and self.rrt_wrapper is not None:

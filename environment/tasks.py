@@ -354,6 +354,8 @@ class TaskLoader:
         if not self.repeat:
             print("[TaskLoader] WARNING: not repeating tasks.")
         assert len(self.files) > 0
+        # TODO change according to which tasks to use
+        # self.files = self.files[150000:]
         print("[TaskLoader] Found {} tasks".format(
             len(self.files)))
         if shuffle:

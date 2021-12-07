@@ -14,6 +14,7 @@ from time import time
 from tensorboardX import SummaryWriter
 from os import mkdir
 from os.path import exists, abspath
+import numpy as np
 
 
 class PolicyManager:
@@ -132,21 +133,119 @@ class ReplayBufferDataset(Dataset):
             )
 
 
+# TODO may want to actual use config to load this......
+def preprocess_trajectories(trajectories):
+    obs_key = [
+        "joint_values",
+        "end_effector_pose",
+        "target_pose",
+        "link_positions",
+        "pose",
+    ]
+    histories = [
+        1,
+        1,
+        1,
+        1,
+        0,
+    ]
+
+    history = []
+
+    states = []
+
+    # first, add in history to the state.
+    for exp in trajectories:
+        state = exp[0]
+        if len(history) == 0:
+            history.append(state)
+
+
+        states.append([])
+        for ur5_state, hist_ur5_state in zip(state['ur5s'], history[-1]['ur5s']):
+            states[-1].append({})
+
+            # include this state and any history
+            for key, num_hist in zip(obs_key, histories):
+                if num_hist == 0:
+                    states[-1][-1][key] = [ur5_state[key]]
+                else:
+                    states[-1][-1][key] = [hist_ur5_state[key], ur5_state[key]]
+
+        history.append(state)
+        del history[0]
+
+        states.append(state)
+
+    print(states[0])
+
+
+
+    # for each ur5 observation....
+    # sort according to difference in pose from this ur5
+
+    pos = np.array(this_ur5.get_pose()[0])
+    sorted_ur5s = [ur5 for ur5 in self.ur5s
+                   if np.linalg.norm(
+                       pos - np.array(ur5.get_pose()[0]))
+                   < 2 * workspace_radius]
+    # Sort by base distance, furthest to closest
+    sorted_ur5s.sort(reverse=True, key=lambda ur5:
+                     np.linalg.norm(pos - np.array(ur5.get_pose()[0])))
+
+
+    output = []
+    for ur5_obs in obs['ur5s']:
+        ur5_output = np.array([])
+        for key in obs_key:
+            key = key.split('_high_freq')[0]
+            item = ur5_obs[key]
+            if not isinstance(item, list) and not isinstance(item, tuple) and len(item.shape) < 2:
+                ur5_output = np.concatenate((
+                    ur5_output,
+                    item))
+            else:
+                for history_frame in item:
+                    # print(ur5_output)
+                    # print(ur5_obs)
+                    # print(history_frame)
+                    ur5_output = np.concatenate((
+                        ur5_output,
+                        history_frame))
+        print(len(ur5_output))
+        output.append(ur5_output)
+    output = torch.FloatTensor(np.array(output))
+
+
+    img_output = obs["image"]
+
+    # channels before h/w
+    img_output = torch.permute(torch.FloatTensor(img_output), (2, 0, 1))
+
+    return outputs, img_outputs
+
 class BehaviourCloneDataset(Dataset):
     def __init__(self, path):
         self.observations = []
+        self.flat_observations = []
+        self.img_observations = []
         self.actions = []
         for file_name in tqdm(
-                Path(path).rglob('*.pkl'),
+                Path(path).rglob('*.pt'),
                 desc='importing trajectories'):
+            print('starting')
             with open(file_name, 'rb') as file:
-                try:
-                    trajectories = pickle.load(file)
-                    self.observations.extend(
-                        FloatTensor(trajectories['observations']))
-                    self.actions.extend(trajectories['actions'])
-                except:
-                    pass
+                trajectories = torch.load(file)
+                flat_obs, img_obs = preprocess_trajectories(trajectories)
+                actions = [exp[1] for exp in trajectories]
+                print()
+                print(actions[0])
+                print()
+                self.flat_observations.extend(FloatTensor(flat_obs))
+                self.img_observations.extend(
+                    FloatTensor(img_obs))
+                self.actions.extend(actions)
+            exit(0)
         self.observations = pad_sequence(
             self.observations,
             batch_first=True)

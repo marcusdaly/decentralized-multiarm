@@ -286,30 +286,34 @@ class BehaviourCloneDataset(Dataset):
         self.img_observations = []
         self.actions = []
         for file_name in tqdm(
-                Path(path).rglob('*.pt'),
+                list(Path(path).rglob('*.pt'))[:100],
                 desc='importing trajectories'):
             with open(file_name, 'rb') as file:
                 experiences = torch.load(file)
                 flat_obs, img_obs = preprocess_experiences(experiences)
                 flat_obs = chain.from_iterable(flat_obs)
                 img_obs = chain.from_iterable(img_obs)
-                actions = [exp[1] for exp in experiences]
+                actions = chain.from_iterable([list(exp[1]) for exp in experiences])
                 self.flat_observations.extend(flat_obs)
                 self.img_observations.extend(img_obs)
                 self.actions.extend(actions)
-        self.observations = pad_sequence(
-            self.observations,
+
+        self.flat_observations = pad_sequence(
+            self.flat_observations,
             batch_first=True)
-        self.actions = FloatTensor(self.actions)
+        self.img_observations = torch.stack(
+            self.img_observations,
+            dim=0)
+        self.actions = torch.stack(self.actions, dim=0)
 
     def __len__(self):
-        return len(self.observations)
+        return len(self.flat_observations)
 
     def __getitem__(self, idx):
-        return (self.observations[idx], self.actions[idx])
+        return ((self.flat_observations[idx], self.img_observations[idx]), self.actions[idx])
 
 
-def setup_behaviour_clone(args, config, obs_dim, device):
+def setup_behaviour_clone(args, config, obs_dim, obs_img_width, img_encoding_dim, device):
     dataset = BehaviourCloneDataset(args.expert_trajectories)
     train_loader = DataLoader(
         dataset,
@@ -320,6 +324,8 @@ def setup_behaviour_clone(args, config, obs_dim, device):
     policy = StochasticActor(
         obs_dim=obs_dim,
         action_dim=6,
+        obs_img_width=obs_img_width,
+        img_encoding_dim=img_encoding_dim,
         action_variance_bounds=config['training']['action_variance'],
         network_config=config['training']['network']['actor']).to(device)
     optimizer = Adam(
@@ -340,9 +346,9 @@ def setup_behaviour_clone(args, config, obs_dim, device):
             pbar = tqdm(train_loader)
             epoch_loss = 0.0
             start = time()
-            for batch_idx, (observations, expert_actions) in enumerate(pbar):
+            for batch_idx, ((flat_observations, img_observations), expert_actions) in enumerate(pbar):
                 policy_action_dist = policy(
-                    observations.to(device, non_blocking=True),
+                    (flat_observations.to(device, non_blocking=True), img_observations.to(device, non_blocking=True)),
                     deterministic=False,
                     reparametrize=True,
                     return_dist=True)

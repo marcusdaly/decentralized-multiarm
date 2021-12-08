@@ -439,6 +439,8 @@ def setup(args, config):
             args, config,
             obs_dim=get_observation_dimensions(
                 config['training']['observations']),
+            obs_img_width=get_observation_img_width(config['training']['observations']),
+            img_encoding_dim=get_img_encoding_dimensions(config['training']['observations']),
             device=get_device())
     env_config = config['environment']
     training_config = config['training']

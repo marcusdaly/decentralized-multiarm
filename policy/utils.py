@@ -150,7 +150,7 @@ def global_to_ur5_frame(base_pos, position, rotation=None):
 
 
 # TODO may want to actual use config to load this......
-def preprocess_trajectories(trajectories):
+def preprocess_experiences(experiences):
     obs_key = [
         "joint_values",
         "end_effector_pose",
@@ -170,7 +170,7 @@ def preprocess_trajectories(trajectories):
     states = []
 
     # first, add in history to the state.
-    for exp in trajectories:
+    for exp in experiences:
         state = exp[0]
         if len(history) == 0:
             history.append(state)
@@ -242,34 +242,40 @@ def preprocess_trajectories(trajectories):
 
             state_observations.append({"flat": sorted_ur5s, "image": state[this_ur5_idx]["image"]})
 
-        all_ur5_observations.extend(state_observations)
+        all_ur5_observations.append(state_observations)
 
     outputs = []
     img_outputs = []
-    for obs in all_ur5_observations:
-        flat_obs = obs["flat"]
-        output = []
-        for ur5_obs in flat_obs:
-            ur5_output = np.array([])
-            for key in obs_key:
-                item = ur5_obs[key]
-                for history_frame in item:
-                    ur5_output = np.concatenate((
-                        ur5_output,
-                        history_frame))
-            output.append(ur5_output)
+    for experience_obs in all_ur5_observations:
+        experience_outputs = []
+        experience_img_outputs = []
+        for obs in experience_obs:
+            flat_obs = obs["flat"]
+            output = []
+            for ur5_obs in flat_obs:
+                ur5_output = np.array([])
+                for key in obs_key:
+                    item = ur5_obs[key]
+                    for history_frame in item:
+                        ur5_output = np.concatenate((
+                            ur5_output,
+                            history_frame))
+                output.append(ur5_output)
 
-        # 107 dim now
-        output = torch.FloatTensor(np.array(output))
+            # 107 dim now
+            output = torch.FloatTensor(np.array(output))
 
-        # 3x64x64
-        img_output = obs["image"]
+            # 3x64x64
+            img_output = obs["image"]
 
-        # channels before h/w
-        img_output = torch.permute(torch.FloatTensor(img_output), (2, 0, 1))
+            # channels before h/w
+            img_output = torch.permute(torch.FloatTensor(img_output), (2, 0, 1))
 
-        outputs.append(output)
-        img_outputs.append(img_output)
+            experience_outputs.append(output)
+            experience_img_outputs.append(img_output)
+
+        outputs.append(experience_outputs)
+        img_outputs.append(experience_img_outputs)
 
     return outputs, img_outputs
 
@@ -283,9 +289,11 @@ class BehaviourCloneDataset(Dataset):
                 Path(path).rglob('*.pt'),
                 desc='importing trajectories'):
             with open(file_name, 'rb') as file:
-                trajectories = torch.load(file)
-                flat_obs, img_obs = preprocess_trajectories(trajectories)
-                actions = [exp[1] for exp in trajectories]
+                experiences = torch.load(file)
+                flat_obs, img_obs = preprocess_experiences(experiences)
+                flat_obs = chain.from_iterable(flat_obs)
+                img_obs = chain.from_iterable(img_obs)
+                actions = [exp[1] for exp in experiences]
                 self.flat_observations.extend(flat_obs)
                 self.img_observations.extend(img_obs)
                 self.actions.extend(actions)

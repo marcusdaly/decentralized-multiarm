@@ -4,6 +4,8 @@ import ray
 import numpy as np
 from .utils import perform_expert_actions
 import torch
+from policy.utils import preprocess_experiences
+from itertools import chain
 
 DEBUG_LOG = False
 COMPUTE_RRT_ONLINE = False
@@ -71,8 +73,26 @@ class RRTSupervisionEnv(BaseEnv):
             return None
         return expert_episodes
 
-    def save_expert_episodes_to_memory(self, expert_episodes):
-        #bla
+    def save_expert_experiences_to_memory(self, expert_experiences):
+
+        # TODO refactor preprocess_experiences to not be flat
+        all_observations = preprocess_experiences(expert_experiences)
+
+        for idx, (experience, observations) in enumerate(zip(expert_experiences, all_observations)):
+            actions = experience[1]
+            rewards = experience[3]
+            self.terminate_episode = idx == (len(expert_experiences) - 1)
+            self.handle_actions(actions)
+
+            self.observations = observations
+
+            for o, r, m in zip(
+                    self.observations,
+                    rewards,
+                    self.ur5_episode_memories):
+                m.add_observation(o)
+                m.add_rewards_and_termination(r, self.terminate_episode)
+                m.add_value('next_observations', o)
 
     def on_episode_end(self):
         super().on_episode_end()
@@ -88,24 +108,27 @@ class RRTSupervisionEnv(BaseEnv):
         self.supervision_mode()
         self.reset_task()
 
-        expert_episodes = None
+        expert_experiences = None
         if self.expert_root_dir is not None:
-            expert_episodes = self.load_expert_waypoints_for_task(
+            expert_experiences = self.load_expert_waypoints_for_task(
                 task_id=self.get_current_task().id)
 
         # if rrt_waypoints is None and self.rrt_wrapper is not None:
         #     rrt_waypoints = ray.get(self.rrt_wrapper.birrt_from_task.remote(
         #         self.get_current_task()))
 
-        if expert_episodes is None or len(expert_episodes) == 0:
+        if expert_experiences is None or len(expert_experiences) == 0:
             self.mark_memories_for_delete()
             self.supervision_stats["supervision_failures"] += 1
             self.terminate_episode = True
             self.normal_mode()
             return None
 
-        if expert_episodes[-1][2]['reach_count'] == 2:
+        self.save_expert_experiences_to_memory(expert_experiences)
+
+        if expert_experiences[-1][2]['reach_count'] == 2:
             self.supervision_stats["supervision_successes"] = 1
+            self.send_memory_to_clusters()
         else:
             self.supervision_stats["supervision_failures"] = 1
             self.mark_memories_for_delete()
@@ -115,9 +138,7 @@ class RRTSupervisionEnv(BaseEnv):
         self.send_stats_to_logger()
         self.normal_mode()
 
-        self.save_expert_episodes_to_memory(expert_episodes)
-        # rv = self.get_env_step_tuple(expert_episodes)
-        return expert_episodes
+        return expert_experiences
 
 
         # rv = perform_expert_actions(
@@ -125,6 +146,9 @@ class RRTSupervisionEnv(BaseEnv):
         #     expert_waypoints=rrt_waypoints,
         #     expert_config=self.expert_config)
         #
+
+        # TODO include this again after loading from expert episode data
+        # once we actually save it.......
         # if self.collisions_in_supervision_mode > 0:
         #     self.supervision_stats["supervision_failures"] += 1
         # assert self.is_supervision_mode()

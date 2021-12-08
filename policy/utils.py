@@ -286,7 +286,7 @@ class BehaviourCloneDataset(Dataset):
         self.img_observations = []
         self.actions = []
         for file_name in tqdm(
-                list(Path(path).rglob('*.pt'))[:100],
+                list(Path(path).rglob('*.pt')),
                 desc='importing trajectories'):
             with open(file_name, 'rb') as file:
                 experiences = torch.load(file)

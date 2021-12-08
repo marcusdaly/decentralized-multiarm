@@ -75,25 +75,25 @@ class RRTSupervisionEnv(BaseEnv):
 
     def save_expert_experiences_to_memory(self, expert_experiences):
 
-        # TODO refactor preprocess_experiences to not be flat
-        all_observations = preprocess_experiences(expert_experiences)
+        # each timesteps x num arms
+        all_flat_observations, all_img_observations = preprocess_experiences(expert_experiences)
 
-        for idx, (experience, observations) in enumerate(zip(expert_experiences, all_observations)):
+        for idx, (experience, flat_observations, img_observations) in enumerate(zip(expert_experiences, all_flat_observations, all_img_observations)):
             actions = experience[1]
             rewards = experience[3]
             self.terminate_episode = idx == (len(expert_experiences) - 1)
-            self.handle_actions(actions)
+            self.observations = zip(flat_observations, img_observations)
 
-            self.observations = observations
-
-            for o, r, m in zip(
-                    self.observations,
+            for flat_obs, img_obs, a, r, m in zip(
+                    flat_observations,
+                    img_observations,
+                    actions,
                     rewards,
                     self.ur5_episode_memories):
-
-
+                o = (flat_obs, img_obs)
                 if idx > 0:
                     m.add_observation(o)
+                m.add_action(a)
                 m.add_rewards_and_termination(r, self.terminate_episode)
                 m.add_value('next_observations', o)
 

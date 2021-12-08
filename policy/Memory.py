@@ -57,9 +57,6 @@ class Memory:
         self.data['is_terminal'].append(float(termination))
 
     def add_observation(self, observation):
-        print(len(self.data['rewards']) , len(self.data['is_terminal']), len(self.data['actions']), len(self.data['observations']))
-
-
         assert len(self.data['rewards']) \
             == len(self.data['is_terminal'])\
             == len(self.data['actions'])\

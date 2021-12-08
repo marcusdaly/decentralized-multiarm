@@ -90,7 +90,10 @@ class RRTSupervisionEnv(BaseEnv):
                     self.observations,
                     rewards,
                     self.ur5_episode_memories):
-                m.add_observation(o)
+
+
+                if idx > 0:
+                    m.add_observation(o)
                 m.add_rewards_and_termination(r, self.terminate_episode)
                 m.add_value('next_observations', o)
 
@@ -110,7 +113,7 @@ class RRTSupervisionEnv(BaseEnv):
 
         expert_experiences = None
         if self.expert_root_dir is not None:
-            expert_experiences = self.load_expert_waypoints_for_task(
+            expert_experiences = self.load_expert_episodes_for_task(
                 task_id=self.get_current_task().id)
 
         # if rrt_waypoints is None and self.rrt_wrapper is not None:

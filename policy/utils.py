@@ -15,7 +15,12 @@ from tensorboardX import SummaryWriter
 from os import mkdir
 from os.path import exists, abspath
 import numpy as np
+import pybullet as p
+from itertools import chain
 
+
+
+workspace_radius = 0.85
 
 class PolicyManager:
     def __init__(self):
@@ -133,6 +138,17 @@ class ReplayBufferDataset(Dataset):
             )
 
 
+def global_to_ur5_frame(base_pos, position, rotation=None):
+    self_pos, self_rot = base_pos
+    invert_self_pos, invert_self_rot = p.invertTransform(
+        self_pos, self_rot)
+    ur5_frame_pos, ur5_frame_rot = p.multiplyTransforms(
+        invert_self_pos, invert_self_rot,
+        position, invert_self_rot if rotation is None else rotation
+    )
+    return ur5_frame_pos, ur5_frame_rot
+
+
 # TODO may want to actual use config to load this......
 def preprocess_trajectories(trajectories):
     obs_key = [
@@ -151,7 +167,6 @@ def preprocess_trajectories(trajectories):
     ]
 
     history = []
-
     states = []
 
     # first, add in history to the state.
@@ -165,62 +180,96 @@ def preprocess_trajectories(trajectories):
         for ur5_state, hist_ur5_state in zip(state['ur5s'], history[-1]['ur5s']):
             states[-1].append({})
 
-            # include this state and any history
             for key, num_hist in zip(obs_key, histories):
-                if num_hist == 0:
-                    states[-1][-1][key] = [ur5_state[key]]
+                val = None
+                if key == 'joint_values':
+                    val = [curr_ur5_state[key]
+                           for curr_ur5_state in ([hist_ur5_state, ur5_state] if num_hist > 0 else [ur5_state])]
+                elif 'link_positions' in key:
+                    # get flatten link positions in ur5's frame of reference
+                    val = [list(chain.from_iterable(
+                        [
+                            global_to_ur5_frame(
+                            base_pos=curr_ur5_state["pose"],
+                            position=np.array(link_pos),
+                            rotation=None)[0]
+                         for link_pos in curr_ur5_state[key]]))
+                        for curr_ur5_state in ([hist_ur5_state, ur5_state] if num_hist > 0 else [ur5_state])]
+                elif 'end_effector_pose' in key or \
+                        'target_pose' in key\
+                        or key == 'pose' or key == 'pose_high_freq':
+                    val = [list(chain.from_iterable(
+                        global_to_ur5_frame(
+                            base_pos=curr_ur5_state["pose"],
+                            position=curr_ur5_state[key][0],
+                            rotation=curr_ur5_state[key][1])))
+                           for curr_ur5_state in ([hist_ur5_state, ur5_state] if num_hist > 0 else [ur5_state])]
                 else:
-                    states[-1][-1][key] = [hist_ur5_state[key], ur5_state[key]]
+                    val = [
+                        global_to_ur5_frame(
+                        base_pos=curr_ur5_state["pose"],
+                        position=curr_ur5_state[key])
+                        for curr_ur5_state in ([hist_ur5_state, ur5_state] if num_hist > 0 else [ur5_state])]
+                states[-1][-1][key] = val
+
+            states[-1][-1]["image"] = ur5_state["image"]
 
         history.append(state)
         del history[0]
 
-        states.append(state)
+    # print(states[0])
 
-    print(states[0])
+    all_ur5_observations = []
 
+    # for each state...
+    for state in states:
+        state_observations = []
+        # for each ur5 observation....
+        for this_ur5_idx, _ in enumerate(state):
+            pos = np.array(state[this_ur5_idx]["pose"])
 
+            # sort according to difference in pose from this ur5
+            # print(state[0]["pose"])
+            # print(pos)
+            sorted_ur5s = [ur5 for ur5 in state
+                           if np.linalg.norm(
+                               pos - np.array(ur5["pose"]))
+                           < 2 * workspace_radius
+            ]
+            # Sort by base distance, furthest to closest
+            sorted_ur5s.sort(reverse=True, key=lambda ur5:
+                             np.linalg.norm(pos - np.array(ur5["pose"])))
 
-    # for each ur5 observation....
-    # sort according to difference in pose from this ur5
+            state_observations.append({"flat": sorted_ur5s, "image": state[this_ur5_idx]["image"]})
 
-    pos = np.array(this_ur5.get_pose()[0])
-    sorted_ur5s = [ur5 for ur5 in self.ur5s
-                   if np.linalg.norm(
-                       pos - np.array(ur5.get_pose()[0]))
-                   < 2 * workspace_radius]
-    # Sort by base distance, furthest to closest
-    sorted_ur5s.sort(reverse=True, key=lambda ur5:
-                     np.linalg.norm(pos - np.array(ur5.get_pose()[0])))
+        all_ur5_observations.extend(state_observations)
 
-
-    output = []
-    for ur5_obs in obs['ur5s']:
-        ur5_output = np.array([])
-        for key in obs_key:
-            key = key.split('_high_freq')[0]
-            item = ur5_obs[key]
-            if not isinstance(item, list) and not isinstance(item, tuple) and len(item.shape) < 2:
-                ur5_output = np.concatenate((
-                    ur5_output,
-                    item))
-            else:
+    outputs = []
+    img_outputs = []
+    for obs in all_ur5_observations:
+        flat_obs = obs["flat"]
+        output = []
+        for ur5_obs in flat_obs:
+            ur5_output = np.array([])
+            for key in obs_key:
+                item = ur5_obs[key]
                 for history_frame in item:
-                    # print(ur5_output)
-                    # print(ur5_obs)
-                    # print(history_frame)
                     ur5_output = np.concatenate((
                         ur5_output,
                         history_frame))
-        print(len(ur5_output))
-        output.append(ur5_output)
-    output = torch.FloatTensor(np.array(output))
+            output.append(ur5_output)
 
+        # 107 dim now
+        output = torch.FloatTensor(np.array(output))
 
-    img_output = obs["image"]
+        # 3x64x64
+        img_output = obs["image"]
 
-    # channels before h/w
-    img_output = torch.permute(torch.FloatTensor(img_output), (2, 0, 1))
+        # channels before h/w
+        img_output = torch.permute(torch.FloatTensor(img_output), (2, 0, 1))
+
+        outputs.append(output)
+        img_outputs.append(img_output)
 
     return outputs, img_outputs
 
@@ -233,19 +282,13 @@ class BehaviourCloneDataset(Dataset):
         for file_name in tqdm(
                 Path(path).rglob('*.pt'),
                 desc='importing trajectories'):
-            print('starting')
             with open(file_name, 'rb') as file:
                 trajectories = torch.load(file)
                 flat_obs, img_obs = preprocess_trajectories(trajectories)
                 actions = [exp[1] for exp in trajectories]
-                print()
-                print(actions[0])
-                print()
-                self.flat_observations.extend(FloatTensor(flat_obs))
-                self.img_observations.extend(
-                    FloatTensor(img_obs))
+                self.flat_observations.extend(flat_obs)
+                self.img_observations.extend(img_obs)
                 self.actions.extend(actions)
-            exit(0)
         self.observations = pad_sequence(
             self.observations,
             batch_first=True)

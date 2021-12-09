@@ -279,24 +279,50 @@ def preprocess_experiences(experiences):
 
     return outputs, img_outputs
 
+@ray.remote
+def process_BC_data(file_name):
+    flat_obs = None
+    img_obs = None
+    actions = None
+    with open(file_name, 'rb') as file:
+        try:
+            experiences = torch.load(file)
+            flat_obs, img_obs = preprocess_experiences(experiences)
+            flat_obs = chain.from_iterable(flat_obs)
+            img_obs = chain.from_iterable(img_obs)
+            actions = chain.from_iterable([list(exp[1]) for exp in experiences])
+        except Exception:
+            print('failed to read',file_name)
+            pass
+    return flat_obs, img_obs, actions
+
 class BehaviourCloneDataset(Dataset):
     def __init__(self, path):
         self.observations = []
         self.flat_observations = []
         self.img_observations = []
         self.actions = []
-        for file_name in tqdm(
-                list(Path(path).rglob('*.pt')),
-                desc='importing trajectories'):
-            with open(file_name, 'rb') as file:
-                experiences = torch.load(file)
-                flat_obs, img_obs = preprocess_experiences(experiences)
-                flat_obs = chain.from_iterable(flat_obs)
-                img_obs = chain.from_iterable(img_obs)
-                actions = chain.from_iterable([list(exp[1]) for exp in experiences])
-                self.flat_observations.extend(flat_obs)
-                self.img_observations.extend(img_obs)
-                self.actions.extend(actions)
+        print('importing trajectories from expert_episodes folder')
+        # for file_name in tqdm(
+        #         list(Path(path).rglob('*.pt')),
+        #         desc='importing trajectories'):
+        #     with open(file_name, 'rb') as file:
+        #         experiences = torch.load(file)
+        #         flat_obs, img_obs = preprocess_experiences(experiences)
+        #         flat_obs = chain.from_iterable(flat_obs)
+        #         img_obs = chain.from_iterable(img_obs)
+        #         actions = chain.from_iterable([list(exp[1]) for exp in experiences])
+        #         self.flat_observations.extend(flat_obs)
+        #         self.img_observations.extend(img_obs)
+        #         self.actions.extend(actions)
+
+        file_list = list(Path(path).rglob('*.pt'))
+        print('finish getting path list')
+        flat_obs, img_obs, actions = ray.get([process_BC_data.remote(file_name) for file_name in file_list])
+        print('finished importing the BC dataset')
+        self.flat_observations.extend(flat_obs)
+        self.img_observations.extend(img_obs)
+        self.actions.extend(actions)
 
         self.flat_observations = pad_sequence(
             self.flat_observations,

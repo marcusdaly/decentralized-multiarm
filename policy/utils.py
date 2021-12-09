@@ -316,21 +316,26 @@ class BehaviourCloneDataset(Dataset):
         #         self.img_observations.extend(img_obs)
         #         self.actions.extend(actions)
 
-        file_list = list(Path(path).rglob('*.pt'))
+        file_list = list(Path(path).rglob('*.pt'))[:100]
         print('finish getting path list')
-        flat_obs, img_obs, actions = ray.get([process_BC_data.remote(file_name) for file_name in file_list])
+
+        for flats, imgs, acts in ray.get([process_BC_data.remote(file_name) for file_name in file_list]):
+            self.flat_observations.extend(flats)
+            self.img_observations.extend(imgs)
+            self.actions.extend(acts)
+
         print('finished importing the BC dataset')
-        self.flat_observations.extend(flat_obs)
-        self.img_observations.extend(img_obs)
-        self.actions.extend(actions)
 
         self.flat_observations = pad_sequence(
             self.flat_observations,
             batch_first=True)
+        print('flat done')
         self.img_observations = torch.stack(
             self.img_observations,
             dim=0)
+        print('flat done')
         self.actions = torch.stack(self.actions, dim=0)
+        print('act done')
 
     def __len__(self):
         return len(self.flat_observations)

@@ -73,6 +73,8 @@ def parse_args():
                         help="path of config json", default=None)
     parser.add_argument("--load", type=str, default=None,
                         help="path of policy to load")
+    parser.add_argument("--bc_load", type=str, default=None,
+                        help="path of BC-trained policy to load")
     parser.add_argument("--tasks_path", type=str, default=None,
                         help="path of directory containing tasks")
     parser.add_argument('--gui', action='store_true',
@@ -224,6 +226,7 @@ def create_policies(args,
         writer=logger,
         device=device,
         load_path=args.load,
+        bc_path=args.bc_load,
         training=training)
     policy_manager.register_policy(
         "multiarm_motion_planner", multiarm_motion_planner_learner)

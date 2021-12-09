@@ -9,6 +9,7 @@ class BaseRLAlgo:
             writer,
             training=True,
             load_path=None,
+            bc_path=None,
             device='cuda'):
         self.writer = writer
         self.policy_key = policy_key
@@ -19,6 +20,7 @@ class BaseRLAlgo:
             self.training = False
         self.device = device
         self.load_path = load_path
+        self.bc_path = bc_path
         self.stats = {}
         self.memory_cluster = None
         self.ray_id = None

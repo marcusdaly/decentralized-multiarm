@@ -21,6 +21,7 @@ class SACLearner(BaseRLAlgo):
             algo_config,
             writer,
             load_path=None,
+            bc_path=None,
             device='cuda',
             # device='cpu',
             training=True,
@@ -30,6 +31,7 @@ class SACLearner(BaseRLAlgo):
             writer=writer,
             training=training,
             load_path=load_path,
+            bc_path=bc_path,
             device=device)
         self.network_fns = network_fns
         self.pi_lr = algo_config["pi_lr"]
@@ -47,9 +49,9 @@ class SACLearner(BaseRLAlgo):
         self.action_scaling = algo_config["action_scaling"]
         self.save_interval = save_interval
         self.replay_buffer = None
-        self.setup(load_path)
+        self.setup(load_path, bc_path)
 
-    def setup(self, load_path):
+    def setup(self, load_path, bc_path):
         self.stats = {
             'time_steps': 0,
             'update_steps': 0
@@ -89,6 +91,14 @@ class SACLearner(BaseRLAlgo):
             self.stats['update_steps'] = checkpoint['stats']['update_steps']
             print("[SAC] Continuing from time step ", self.stats['time_steps'],
                   " and update step ", self.stats['update_steps'])
+
+        elif bc_path is not None:
+            print("[SAC] loading networks from BC init", bc_path)
+            checkpoint = torch.load(bc_path, map_location=self.device)
+            networks = checkpoint['networks']
+            self.policy.load_state_dict(networks['policy'])
+
+
         self.memory_cluster = MemoryCluster.remote(
             memory_fields=['next_observations'],
             init_time_steps=self.stats['time_steps'])

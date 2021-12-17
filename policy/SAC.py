@@ -98,6 +98,36 @@ class SACLearner(BaseRLAlgo):
             networks = checkpoint['networks']
             self.policy.load_state_dict(networks['policy'])
 
+            print("LOADING EXPERIMENTAL STUFF")
+            # print(self.Q1.img_encoder.state_dict().keys())
+
+            policy_keys = ['img_encoder.0.weight', 'img_encoder.1.weight', 'img_encoder.4.weight', 'img_encoder.5.weight', 'img_encoder.8.weight', 'img_encoder.9.weight', 'img_encoder.12.weight']
+            keys_without_prefix = list(self.Q1.img_encoder.state_dict().keys())
+            policy_renaming_dict = {old: new for old, new in zip(policy_keys, keys_without_prefix)}
+
+            new_policy_dict = {policy_renaming_dict[key]: val for key, val in networks["policy"].items() if key in policy_renaming_dict}
+
+            self.Q1.img_encoder.load_state_dict(new_policy_dict)
+            print("q1 done")
+            self.Q2.img_encoder.load_state_dict(new_policy_dict)
+            self.Q1_target.img_encoder.load_state_dict(new_policy_dict)
+            self.Q2_target.img_encoder.load_state_dict(new_policy_dict)
+
+
+            policy_keys = ['seq_net.weight_ih_l0', 'seq_net.weight_hh_l0', 'seq_net.bias_ih_l0', 'seq_net.bias_hh_l0']
+            keys_without_prefix = list(self.Q1.seq_net.state_dict().keys())
+            policy_renaming_dict = {old: new for old, new in zip(policy_keys, keys_without_prefix)}
+
+            new_policy_dict = {policy_renaming_dict[key]: val for key, val in networks["policy"].items() if key in policy_renaming_dict}
+
+            self.Q1.seq_net.load_state_dict(new_policy_dict)
+            print("q1 done")
+            self.Q2.seq_net.load_state_dict(new_policy_dict)
+            self.Q1_target.seq_net.load_state_dict(new_policy_dict)
+            self.Q2_target.seq_net.load_state_dict(new_policy_dict)
+
+            print("DONE LOADING EXPERIMENTAL STUFF")
+
 
         self.memory_cluster = MemoryCluster.remote(
             memory_fields=['next_observations'],

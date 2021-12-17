@@ -105,6 +105,7 @@ class RRTSupervisionEnv(BaseEnv):
             return None
 
         if self.finish_task_in_episode:
+            # print("SUCCESSFUL TASK ID:", self.get_current_task().id)
             # Robots succeeeded, don't need to show demonstration
             return None
 

@@ -124,7 +124,7 @@ def parse_args():
             print("Please supply path to config file with --config")
             exit()
     if args.mode == 'benchmark' or args.mode == 'enjoy':
-        if args.load is None:
+        if args.load is None and args.bc_load is None:
             print("load a policy to benchmark")
             parser.print_help()
             exit()
@@ -425,7 +425,7 @@ def prepare_logger(args, config):
         dump(config, open(logdir + '/config.json', 'w'), indent=4)
     elif args.mode == 'benchmark':
         logger = Logger.remote(
-            logdir=dirname(args.load),
+            logdir=dirname(args.load if args.load is not None else args.bc_load),
             benchmark_mode=True,
             benchmark_name=args.name
         )
